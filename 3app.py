@@ -23,6 +23,8 @@ Station = Base.classes.station
 # Flask Setup
 app = Flask(__name__)
 
+session = Session(engine)
+
 # Flask Routes
 @app.route("/")
 def welcome():
@@ -37,8 +39,6 @@ def welcome():
 
 @app.route("/api/v1.0/precipitation")
 def precipitation():
-    session = Session(engine)
-    
     prev_year = dt.date(2017, 8, 23) - dt.timedelta(days=365)
     
     precip = session.query(Measurement.date, Measurement.prcp).filter(Measurement.date >= prev_year).all()
@@ -47,43 +47,54 @@ def precipitation():
     print(precip_list)
     return jsonify(precip_list)
 
-
+session.close()
 
 @app.route("/api/v1.0/stations")
 def stations():
-    session = Session(engine)
     stations_all = session.query(Station.station, Station.name).all()
     station_list = dict(stations_all)
     
     print(station_list)
     return jsonify(station_list)
 
+session.close()
 
 @app.route("/api/v1.0/tobs")
 def tobs():
-    session = Session(engine)
     query_date = dt.date(2017, 8, 23) - dt.timedelta(days=365)
 
     station_tobs = session.query(Measurement.date, Measurement.tobs).\
-    filter(Measurement.station == 'USC00519281').\
-    filter(Measurement.date >= query_date).all()
+        filter(Measurement.station == 'USC00519281').\
+        filter(Measurement.date >= query_date).all()
     station_temps = dict(station_tobs)
 
     print(station_temps)
     return jsonify(station_temps)
 
+session.close()
 
+@app.route("/api/v1.0/<start>")
+@app.route("/api/v1.0/<start>/<end>")
+def start_end(start=None, end=None):
 
+    if not end:
+        results = session.query(Measurement.date, func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).\
+            group_by(Measurement.date).all()
 
+    else:
+        results = session.query(Measurement.date, func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).\
+            filter(Measurement.date <= end).\
+            group_by(Measurement.date).all()
 
+    dates = list(np.ravel(results))
+    
+    print(dates)
+    return jsonify(dates)
 
+session.close()
 
-
-
-
-
-
-
-# 4. Define main behavior
 if __name__ == "__main__":
     app.run(debug=True)
+
